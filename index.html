@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PratoRápido – Protótipo</title>
+<style>
+  /* ===== 1. Variáveis de design (cores com contraste AA) ===== */
+  :root {
+    --cor-primaria: #C2410C;   /* laranja escuro: contraste 5,2:1 com branco */
+    --cor-primaria-esc: #9A3412;
+    --cor-texto: #1F2937;
+    --cor-suave: #4B5563;
+    --cor-fundo: #FFF7ED;
+    --cor-card: #FFFFFF;
+    --cor-borda: #D1D5DB;
+    --cor-ok: #166534;
+    --raio: 12px;
+  }
+
+  /* ===== 2. Base ===== */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px; line-height: 1.5;
+    color: var(--cor-texto); background: #E5E7EB;
+    display: flex; justify-content: center;
+  }
+  button, input, select { font: inherit; }
+  :focus-visible { outline: 3px solid #1D4ED8; outline-offset: 2px; }
+
+  /* ===== 3. Moldura do celular ===== */
+  #app {
+    width: 100%; max-width: 420px; min-height: 100vh;
+    background: var(--cor-fundo); display: flex; flex-direction: column;
+    position: relative;
+  }
+  header.topo {
+    background: var(--cor-primaria); color: #fff;
+    padding: 16px; display: flex; align-items: center; gap: 12px;
+  }
+  header.topo h1 { font-size: 20px; flex: 1; }
+  main { flex: 1; padding: 16px; padding-bottom: 96px; }
+  h2 { font-size: 20px; margin-bottom: 12px; }
+
+  /* ===== 4. Componentes ===== */
+  .btn {
+    min-height: 48px; padding: 12px 20px; border: 0; cursor: pointer;
+    border-radius: var(--raio); background: var(--cor-primaria);
+    color: #fff; font-weight: bold; width: 100%;
+  }
+  .btn:hover { background: var(--cor-primaria-esc); }
+  .btn.sec { background: #fff; color: var(--cor-primaria); border: 2px solid var(--cor-primaria); }
+  .btn.mini { width: auto; min-height: 44px; padding: 8px 16px; }
+  .btn.voltar { background: transparent; width: auto; padding: 8px 12px; }
+
+  label { display: block; font-weight: bold; margin: 12px 0 4px; }
+  input[type=text], input[type=email], input[type=password] {
+    width: 100%; min-height: 48px; padding: 10px 12px;
+    border: 2px solid var(--cor-borda); border-radius: var(--raio);
+  }
+  .card {
+    background: var(--cor-card); border: 1px solid var(--cor-borda);
+    border-radius: var(--raio); padding: 12px; margin-bottom: 12px;
+  }
+  .prato { display: flex; gap: 12px; align-items: center; }
+  .prato .emoji { font-size: 40px; width: 56px; text-align: center; }
+  .prato .info { flex: 1; }
+  .prato .nome { font-weight: bold; }
+  .prato .desc { color: var(--cor-suave); font-size: 14px; }
+  .prato .preco { font-weight: bold; color: var(--cor-primaria-esc); }
+
+  .filtros { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 4px; }
+  .chip {
+    min-height: 44px; padding: 8px 16px; border-radius: 22px; white-space: nowrap;
+    border: 2px solid var(--cor-primaria); background: #fff; color: var(--cor-primaria-esc);
+    cursor: pointer; font-weight: bold;
+  }
+  .chip[aria-pressed=true] { background: var(--cor-primaria); color: #fff; }
+
+  .linha { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .qtd { display: flex; align-items: center; gap: 8px; }
+  .qtd button {
+    width: 44px; height: 44px; border-radius: 50%; font-size: 20px; font-weight: bold;
+    border: 2px solid var(--cor-primaria); background: #fff; color: var(--cor-primaria); cursor: pointer;
+  }
+  .total { font-size: 20px; font-weight: bold; }
+
+  .opcao { display: flex; align-items: center; gap: 12px; min-height: 48px; margin: 0; font-weight: normal; }
+  .opcao input { width: 24px; height: 24px; accent-color: var(--cor-primaria); }
+
+  .barra-carrinho {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 420px;
+    padding: 12px 16px; background: #fff; border-top: 1px solid var(--cor-borda);
+  }
+  .toast {
+    position: fixed; top: 76px; left: 50%; transform: translateX(-50%);
+    background: var(--cor-ok); color: #fff; padding: 12px 20px;
+    border-radius: var(--raio); font-weight: bold; z-index: 10;
+  }
+  .sucesso { text-align: center; padding: 24px 0; }
+  .sucesso .icone { font-size: 64px; }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topo">
+    <button class="btn voltar oculto" id="btn-voltar" aria-label="Voltar para a tela anterior">← Voltar</button>
+    <h1>🍽️ PratoRápido</h1>
+  </header>
+  <div id="aviso" role="status" aria-live="polite"></div>
+  <main id="tela"></main>
+</div>
+
+<script>
+/* ===== 1. DADOS ===== */
+const CATEGORIAS = ["Todos", "Massas", "Bebidas", "Sobremesas"];
+const PRATOS = [
+  { id: 1, nome: "Spaghetti à Bolonhesa", desc: "Molho de carne e tomate", preco: 28.9, cat: "Massas", icone: "🍝" },
+  { id: 2, nome: "Lasanha de Frango", desc: "Frango, queijo e molho branco", preco: 32.5, cat: "Massas", icone: "🧀" },
+  { id: 3, nome: "Suco de Laranja", desc: "Natural, 400 ml", preco: 8.0, cat: "Bebidas", icone: "🍊" },
+  { id: 4, nome: "Refrigerante Lata", desc: "350 ml", preco: 6.0, cat: "Bebidas", icone: "🥤" },
+  { id: 5, nome: "Pudim de Leite", desc: "Fatia individual", preco: 10.0, cat: "Sobremesas", icone: "🍮" },
+  { id: 6, nome: "Brownie com Sorvete", desc: "Chocolate e creme", preco: 16.0, cat: "Sobremesas", icone: "🍫" },
+];
+const PAGAMENTOS = ["Pix", "Cartão de crédito", "Dinheiro"];
+
+/* ===== 2. ESTADO ===== */
+const estado = { tela: "login", filtro: "Todos", carrinho: {}, pagamento: "Pix" };
+
+/* ===== 3. FUNÇÕES AUXILIARES ===== */
+const $ = (id) => document.getElementById(id);
+const moeda = (v) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const itensCarrinho = () =>
+  Object.entries(estado.carrinho).map(([id, qtd]) => ({ ...PRATOS.find((p) => p.id == id), qtd }));
+const totalCarrinho = () => itensCarrinho().reduce((s, i) => s + i.preco * i.qtd, 0);
+const qtdTotal = () => itensCarrinho().reduce((s, i) => s + i.qtd, 0);
+
+function avisar(msg) {
+  $("aviso").innerHTML = `<div class="toast">${msg}</div>`;
+  setTimeout(() => ($("aviso").innerHTML = ""), 2000);
+}
+function irPara(tela) { estado.tela = tela; render(); window.scrollTo(0, 0); }
+
+/* ===== 4. AÇÕES ===== */
+function entrar(e) {
+  e.preventDefault();
+  const email = $("email").value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    $("erro-email").textContent = "Digite um e-mail válido. Exemplo: nome@email.com";
+    $("email").focus();
+    return;
+  }
+  irPara("cardapio");
+}
+function alterarQtd(id, delta) {
+  const nova = (estado.carrinho[id] || 0) + delta;
+  if (nova <= 0) delete estado.carrinho[id]; else estado.carrinho[id] = nova;
+  render();
+}
+function adicionar(id) {
+  alterarQtd(id, 1);
+  avisar("✔ " + PRATOS.find((p) => p.id === id).nome + " adicionado!");
+}
+function confirmar() {
+  if (qtdTotal() === 0) { avisar("Seu carrinho está vazio."); return; }
+  irPara("confirmacao");
+}
+function novoPedido() { estado.carrinho = {}; irPara("cardapio"); }
+
+/* ===== 5. TELAS ===== */
+function telaLogin() {
+  return `
+    <h2>Bem-vindo(a)!</h2>
+    <p>Entre para pedir sua refeição em poucos toques.</p>
+    <form id="form-login" novalidate>
+      <label for="email">E-mail</label>
+      <input type="email" id="email" autocomplete="email" placeholder="nome@email.com" aria-describedby="erro-email">
+      <p id="erro-email" role="alert" style="color:#B91C1C"></p>
+      <label for="senha">Senha</label>
+      <input type="password" id="senha" autocomplete="current-password">
+      <div style="margin-top:20px; display:grid; gap:12px">
+        <button class="btn" type="submit">Entrar</button>
+        <button class="btn sec" type="button" data-acao="visitante">Continuar sem cadastro</button>
+      </div>
+    </form>`;
+}
+
+function telaCardapio() {
+  const filtros = CATEGORIAS.map((c) =>
+    `<button class="chip" aria-pressed="${c === estado.filtro}" data-filtro="${c}">${c}</button>`).join("");
+  const lista = PRATOS.filter((p) => estado.filtro === "Todos" || p.cat === estado.filtro).map((p) => `
+    <article class="card prato">
+      <div class="emoji" aria-hidden="true">${p.icone}</div>
+      <div class="info">
+        <div class="nome">${p.nome}</div>
+        <div class="desc">${p.desc}</div>
+        <div class="preco">${moeda(p.preco)}</div>
+      </div>
+      <button class="btn mini" data-add="${p.id}" aria-label="Adicionar ${p.nome} ao carrinho">+ Adicionar</button>
+    </article>`).join("");
+  const barra = `
+    <div class="barra-carrinho">
+      <button class="btn" data-acao="carrinho">🛒 Ver carrinho (${qtdTotal()}) – ${moeda(totalCarrinho())}</button>
+    </div>`;
+  return `<h2>Cardápio</h2><div class="filtros" role="group" aria-label="Filtrar por categoria">${filtros}</div>${lista}${barra}`;
+}
+
+function telaCarrinho() {
+  const itens = itensCarrinho();
+  const lista = itens.length === 0
+    ? `<p class="card">Seu carrinho está vazio. Volte ao cardápio para escolher pratos.</p>`
+    : itens.map((i) => `
+      <div class="card linha">
+        <div><div class="nome"><b>${i.icone} ${i.nome}</b></div><div>${moeda(i.preco * i.qtd)}</div></div>
+        <div class="qtd">
+          <button data-qtd="${i.id}" data-delta="-1" aria-label="Diminuir quantidade de ${i.nome}">−</button>
+          <strong aria-live="polite">${i.qtd}</strong>
+          <button data-qtd="${i.id}" data-delta="1" aria-label="Aumentar quantidade de ${i.nome}">+</button>
+        </div>
+      </div>`).join("");
+  const pagamentos = PAGAMENTOS.map((p) => `
+    <label class="opcao"><input type="radio" name="pag" value="${p}" ${p === estado.pagamento ? "checked" : ""}> ${p}</label>`).join("");
+  return `
+    <h2>Resumo do pedido</h2>${lista}
+    <div class="card linha"><span>Total</span><span class="total">${moeda(totalCarrinho())}</span></div>
+    <fieldset class="card"><legend><b>Forma de pagamento</b></legend>${pagamentos}</fieldset>
+    <button class="btn" data-acao="confirmar">Confirmar pedido</button>`;
+}
+
+function telaConfirmacao() {
+  return `
+    <div class="sucesso" role="status">
+      <div class="icone" aria-hidden="true">✅</div>
+      <h2>Pedido confirmado!</h2>
+      <p>Pagamento: <b>${estado.pagamento}</b></p>
+      <p>Total: <b>${moeda(totalCarrinho())}</b></p>
+      <p>Tempo estimado de entrega: <b>30 a 40 minutos</b></p>
+    </div>
+    <button class="btn" data-acao="novo">Fazer novo pedido</button>`;
+}
+
+/* ===== 6. RENDERIZAÇÃO E EVENTOS ===== */
+const TELAS = { login: telaLogin, cardapio: telaCardapio, carrinho: telaCarrinho, confirmacao: telaConfirmacao };
+const VOLTAR = { cardapio: "login", carrinho: "cardapio" };
+
+function render() {
+  $("tela").innerHTML = TELAS[estado.tela]();
+  $("btn-voltar").classList.toggle("oculto", !VOLTAR[estado.tela]);
+  const form = $("form-login");
+  if (form) form.addEventListener("submit", entrar);
+}
+
+document.addEventListener("click", (e) => {
+  const alvo = e.target.closest("button");
+  if (!alvo) return;
+  const d = alvo.dataset;
+  if (alvo.id === "btn-voltar") irPara(VOLTAR[estado.tela]);
+  else if (d.filtro) { estado.filtro = d.filtro; render(); }
+  else if (d.add) adicionar(Number(d.add));
+  else if (d.qtd) alterarQtd(Number(d.qtd), Number(d.delta));
+  else if (d.acao === "visitante") irPara("cardapio");
+  else if (d.acao === "carrinho") irPara("carrinho");
+  else if (d.acao === "confirmar") confirmar();
+  else if (d.acao === "novo") novoPedido();
+});
+document.addEventListener("change", (e) => {
+  if (e.target.name === "pag") estado.pagamento = e.target.value;
+});
+
+render();
+</script>
+</body>
+</html>
